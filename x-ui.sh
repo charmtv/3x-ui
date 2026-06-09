@@ -175,11 +175,8 @@ legacy_version() {
         echo "面板版本不能为空，正在退出。"
         exit 1
     fi
-    # Use the entered panel version in the download link
-    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/charmtv/3x-ui/v$tag_version/install.sh") v$tag_version"
-
     echo "正在下载并安装面板版本 $tag_version..."
-    eval $install_command
+    bash <(curl -Ls https://raw.githubusercontent.com/charmtv/3x-ui/main/install.sh) "v$tag_version"
 }
 
 # Function to handle the deletion of the script file

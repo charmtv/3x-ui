@@ -10,6 +10,10 @@ cur_dir=$(pwd)
 
 xui_folder="${XUI_MAIN_FOLDER:=/usr/local/x-ui}"
 xui_service="${XUI_SERVICE:=/etc/systemd/system}"
+xui_release_repo="${XUI_RELEASE_REPO:-charmtv/3x-ui}"
+xui_release_fallback_repo="${XUI_RELEASE_FALLBACK_REPO:-MHSanaei/3x-ui}"
+resolved_xui_release_repo=""
+latest_xui_asset_tag=""
 
 # check root
 [[ $EUID -ne 0 ]] && echo -e "${red}致命错误：${plain} 请使用 root 权限运行此脚本 \n " && exit 1
@@ -41,6 +45,115 @@ arch() {
 }
 
 echo "系统架构：$(arch)"
+
+xui_release_repos() {
+    printf '%s\n' "$xui_release_repo"
+    if [[ -n "$xui_release_fallback_repo" && "$xui_release_fallback_repo" != "$xui_release_repo" ]]; then
+        printf '%s\n' "$xui_release_fallback_repo"
+    fi
+}
+
+fetch_latest_xui_tag() {
+    local repo="$1"
+    local tag
+
+    tag=$(curl -Ls "https://api.github.com/repos/${repo}/releases/latest" 2> /dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [[ -z "$tag" ]]; then
+        echo -e "${yellow}正在尝试使用 IPv4 获取 ${repo} 版本...${plain}" >&2
+        tag=$(curl -4 -Ls "https://api.github.com/repos/${repo}/releases/latest" 2> /dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
+
+    printf '%s' "$tag"
+}
+
+download_xui_release() {
+    local repo="$1"
+    local tag="$2"
+    local archive="${xui_folder}-linux-$(arch).tar.gz"
+    local url="https://github.com/${repo}/releases/download/${tag}/x-ui-linux-$(arch).tar.gz"
+
+    curl -fLRo "$archive" "$url" 2> /dev/null && return 0
+    echo -e "${yellow}正在尝试使用 IPv4 下载 x-ui...${plain}" >&2
+    curl -4fLRo "$archive" "$url" 2> /dev/null
+}
+
+fetch_latest_xui_asset_tag() {
+    local repo="$1"
+    local url="https://github.com/${repo}/releases/latest/download/x-ui-linux-$(arch).tar.gz"
+    local tag
+
+    tag=$(curl -fsSI "$url" 2> /dev/null | tr -d '\r' | awk 'tolower($0) ~ /^location:/ && index($0, "/releases/download/") { sub(/^.*\/releases\/download\//, "", $0); sub(/\/.*$/, "", $0); print; exit }')
+    if [[ -z "$tag" ]]; then
+        tag=$(curl -4fsSI "$url" 2> /dev/null | tr -d '\r' | awk 'tolower($0) ~ /^location:/ && index($0, "/releases/download/") { sub(/^.*\/releases\/download\//, "", $0); sub(/\/.*$/, "", $0); print; exit }')
+    fi
+
+    printf '%s' "$tag"
+}
+
+download_latest_xui_asset() {
+    local repo="$1"
+    local archive="${xui_folder}-linux-$(arch).tar.gz"
+    local url="https://github.com/${repo}/releases/latest/download/x-ui-linux-$(arch).tar.gz"
+
+    latest_xui_asset_tag=""
+    latest_xui_asset_tag=$(fetch_latest_xui_asset_tag "$repo")
+
+    curl -fLRo "$archive" "$url" 2> /dev/null && return 0
+
+    echo -e "${yellow}正在尝试使用 IPv4 直接下载 latest 制品...${plain}" >&2
+    curl -4fLRo "$archive" "$url" 2> /dev/null
+}
+
+download_latest_xui_release() {
+    local repo
+    local tag
+
+    while IFS= read -r repo; do
+        [[ -z "$repo" ]] && continue
+        tag=$(fetch_latest_xui_tag "$repo")
+
+        if [[ -n "$tag" ]]; then
+            echo -e "获取到 x-ui 最新版本：${tag}，制品源：${repo}，开始下载..."
+            if download_xui_release "$repo" "$tag"; then
+                tag_version="$tag"
+                resolved_xui_release_repo="$repo"
+                return 0
+            fi
+            echo -e "${yellow}${repo} 的制品下载失败，继续尝试其他制品源...${plain}" >&2
+        else
+            echo -e "${yellow}未能通过 API 获取 ${repo} 版本，尝试直接下载 latest 制品...${plain}" >&2
+            if download_latest_xui_asset "$repo"; then
+                tag_version="${latest_xui_asset_tag:-latest}"
+                resolved_xui_release_repo="$repo"
+                echo -e "已通过 ${repo} latest 制品完成下载，版本：${tag_version}，开始安装..."
+                return 0
+            fi
+            if [[ "$repo" == "$xui_release_repo" && -n "$xui_release_fallback_repo" && "$xui_release_fallback_repo" != "$xui_release_repo" ]]; then
+                echo -e "${yellow}当前仓库未找到可用 release，准备尝试备用制品源...${plain}" >&2
+            fi
+        fi
+    done < <(xui_release_repos)
+
+    return 1
+}
+
+download_xui_release_by_tag() {
+    local tag="$1"
+    local repo
+
+    while IFS= read -r repo; do
+        [[ -z "$repo" ]] && continue
+        echo -e "开始从 ${repo} 下载 x-ui ${tag}..."
+        if download_xui_release "$repo" "$tag"; then
+            tag_version="$tag"
+            resolved_xui_release_repo="$repo"
+            return 0
+        fi
+        echo -e "${yellow}${repo} 没有可用的 ${tag} 制品，继续尝试其他制品源...${plain}" >&2
+    done < <(xui_release_repos)
+
+    return 1
+}
 
 # Simple helpers
 is_ipv4() {
@@ -1131,19 +1244,8 @@ install_x-ui() {
 
     # Download resources
     if [ $# == 0 ]; then
-        tag_version=$(curl -Ls "https://api.github.com/repos/charmtv/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$tag_version" ]]; then
-            echo -e "${yellow}正在尝试使用 IPv4 获取版本...${plain}"
-            tag_version=$(curl -4 -Ls "https://api.github.com/repos/charmtv/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-            if [[ ! -n "$tag_version" ]]; then
-                echo -e "${red}获取 x-ui 版本失败，可能是 GitHub API 限制，请稍后重试${plain}"
-                exit 1
-            fi
-        fi
-        echo -e "获取到 x-ui 最新版本：${tag_version}，开始安装..."
-        curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/charmtv/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
-        if [[ $? -ne 0 ]]; then
-            echo -e "${red}下载 x-ui 失败，请确认服务器可以访问 GitHub ${plain}"
+        if ! download_latest_xui_release; then
+            echo -e "${red}获取 x-ui 版本或下载制品失败，请检查服务器网络或 release 配置。${plain}"
             exit 1
         fi
     else
@@ -1156,10 +1258,7 @@ install_x-ui() {
             exit 1
         fi
 
-        url="https://github.com/charmtv/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
-        echo -e "开始安装 x-ui $1"
-        curl -4fLRo ${xui_folder}-linux-$(arch).tar.gz ${url}
-        if [[ $? -ne 0 ]]; then
+        if ! download_xui_release_by_tag "$tag_version"; then
             echo -e "${red}下载 x-ui $1 失败，请检查版本是否存在 ${plain}"
             exit 1
         fi
