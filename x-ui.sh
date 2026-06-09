@@ -2988,71 +2988,149 @@ migrate_db_prompt() {
     migrate_db "$input" "$output"
 }
 
+repeat_char() {
+    local char="$1"
+    local count="$2"
+    local output=""
+
+    while ((count > 0)); do
+        output="${output}${char}"
+        ((count--))
+    done
+
+    printf '%s' "$output"
+}
+
+display_width() {
+    local rendered clean bytes ascii_bytes non_ascii_bytes
+
+    rendered=$(printf '%b' "$1")
+    clean=$(printf '%s' "$rendered" | sed -E $'s/\x1B\\[[0-9;]*[A-Za-z]//g')
+    bytes=$(printf '%s' "$clean" | wc -c | tr -dc '0-9')
+    ascii_bytes=$(printf '%s' "$clean" | LC_ALL=C tr -cd '\000-\177' | wc -c | tr -dc '0-9')
+    non_ascii_bytes=$((bytes - ascii_bytes))
+
+    # 当前菜单只含 ASCII 和中文，中文 UTF-8 3 字节、终端显示宽度为 2。
+    printf '%s' $((ascii_bytes + (non_ascii_bytes / 3 * 2)))
+}
+
+box_top() {
+    local width="$1"
+    printf '╔%s╗\n' "$(repeat_char "─" "$width")"
+}
+
+box_middle() {
+    local width="$1"
+    printf '│%s│\n' "$(repeat_char "─" "$width")"
+}
+
+box_bottom() {
+    local width="$1"
+    printf '╚%s╝\n' "$(repeat_char "─" "$width")"
+}
+
+box_line() {
+    local content="$1"
+    local width="$2"
+    local content_width pad
+
+    content_width=$(display_width "$content")
+    pad=$((width - content_width - 2))
+    ((pad < 0)) && pad=0
+
+    printf '│ %b%*s │\n' "$content" "$pad" ''
+}
+
+box_usage_entry() {
+    local command="$1"
+    local description="$2"
+    local width="$3"
+    local command_column=30
+    local command_pad
+
+    command_pad=$((command_column - ${#command}))
+    ((command_pad < 1)) && command_pad=1
+    box_line "${blue}${command}${plain}$(printf '%*s' "$command_pad" '')- ${description}" "$width"
+}
+
+box_menu_item() {
+    local number="$1"
+    local label="$2"
+    local width="$3"
+    local prefix
+
+    prefix=$(printf '%2s.' "$number")
+    box_line "${green}${prefix}${plain} ${label}" "$width"
+}
+
 show_usage() {
-    echo -e "┌────────────────────────────────────────────────────────────────┐
-│  ${blue}x-ui 控制菜单用法（子命令）：${plain}                       │
-│                                                                │
-│  ${blue}x-ui${plain}                       - 管理脚本          │
-│  ${blue}x-ui start${plain}                 - 启动                            │
-│  ${blue}x-ui stop${plain}                  - 停止                             │
-│  ${blue}x-ui restart${plain}               - 重启                          │
-|  ${blue}x-ui restart-xray${plain}          - 重启 Xray                     │
-│  ${blue}x-ui status${plain}                - 当前状态                   │
-│  ${blue}x-ui settings${plain}              - 当前设置                 │
-│  ${blue}x-ui enable${plain}                - 启用开机自启   │
-│  ${blue}x-ui disable${plain}               - 禁用开机自启  │
-│  ${blue}x-ui log${plain}                   - 查看日志                       │
-│  ${blue}x-ui banlog${plain}                - 查看 Fail2ban 封禁日志          │
-│  ${blue}x-ui update${plain}                - 更新                           │
-│  ${blue}x-ui update-all-geofiles${plain}   - 更新所有地理文件             │
-│  ${blue}x-ui migrateDB [file]${plain}      - 转换 .db <-> .dump（SQLite）   │
-│  ${blue}x-ui legacy${plain}                - 历史版本                   │
-│  ${blue}x-ui install${plain}               - 安装                          │
-│  ${blue}x-ui uninstall${plain}             - 卸载                        │
-└────────────────────────────────────────────────────────────────┘"
+    local width=66
+
+    box_top "$width"
+    box_line "${blue}x-ui 控制菜单用法（子命令）：${plain}" "$width"
+    box_line "" "$width"
+    box_usage_entry "x-ui" "管理脚本" "$width"
+    box_usage_entry "x-ui start" "启动" "$width"
+    box_usage_entry "x-ui stop" "停止" "$width"
+    box_usage_entry "x-ui restart" "重启" "$width"
+    box_usage_entry "x-ui restart-xray" "重启 Xray" "$width"
+    box_usage_entry "x-ui status" "当前状态" "$width"
+    box_usage_entry "x-ui settings" "当前设置" "$width"
+    box_usage_entry "x-ui enable" "启用开机自启" "$width"
+    box_usage_entry "x-ui disable" "禁用开机自启" "$width"
+    box_usage_entry "x-ui log" "查看日志" "$width"
+    box_usage_entry "x-ui banlog" "查看 Fail2ban 封禁日志" "$width"
+    box_usage_entry "x-ui update" "更新" "$width"
+    box_usage_entry "x-ui update-all-geofiles" "更新所有地理文件" "$width"
+    box_usage_entry "x-ui migrateDB [file]" "转换 .db <-> .dump（SQLite）" "$width"
+    box_usage_entry "x-ui legacy" "历史版本" "$width"
+    box_usage_entry "x-ui install" "安装" "$width"
+    box_usage_entry "x-ui uninstall" "卸载" "$width"
+    box_bottom "$width"
 }
 
 show_menu() {
-    echo -e "
-╔────────────────────────────────────────────────╗
-│   ${green}3X-UI 面板管理脚本${plain}                │
-│   ${green}0.${plain} 退出脚本                               │
-│────────────────────────────────────────────────│
-│   ${green}1.${plain} 安装                                   │
-│   ${green}2.${plain} 更新                                    │
-│   ${green}3.${plain} 更新菜单                               │
-│   ${green}4.${plain} 历史版本                            │
-│   ${green}5.${plain} 卸载                                 │
-│────────────────────────────────────────────────│
-│   ${green}6.${plain} 重置用户名和密码                 │
-│   ${green}7.${plain} 重置 Web 访问路径                       │
-│   ${green}8.${plain} 重置设置                            │
-│   ${green}9.${plain} 修改端口                               │
-│  ${green}10.${plain} 查看当前设置                     │
-│────────────────────────────────────────────────│
-│  ${green}11.${plain} 启动                                     │
-│  ${green}12.${plain} 停止                                      │
-│  ${green}13.${plain} 重启                                   │
-|  ${green}14.${plain} 重启 Xray                              │
-│  ${green}15.${plain} 查看状态                              │
-│  ${green}16.${plain} 日志管理                           │
-│────────────────────────────────────────────────│
-│  ${green}17.${plain} 启用开机自启                          │
-│  ${green}18.${plain} 禁用开机自启                         │
-│────────────────────────────────────────────────│
-│  ${green}19.${plain} SSL 证书管理                │
-│  ${green}20.${plain} Cloudflare SSL 证书                │
-│  ${green}21.${plain} IP 限制管理                       │
-│  ${green}22.${plain} 防火墙管理                       │
-│  ${green}23.${plain} SSH 端口转发管理            │
-│────────────────────────────────────────────────│
-│  ${green}24.${plain} 启用 BBR                                │
-│  ${green}25.${plain} 更新地理文件                          │
-│  ${green}26.${plain} Ookla Speedtest                        │
-│────────────────────────────────────────────────│
-│  ${green}27.${plain} PostgreSQL 管理                     │
-╚────────────────────────────────────────────────╝
-"
+    local width=48
+
+    echo
+    box_top "$width"
+    box_line "  ${green}3X-UI 面板管理脚本${plain}" "$width"
+    box_menu_item 0 "退出脚本" "$width"
+    box_middle "$width"
+    box_menu_item 1 "安装" "$width"
+    box_menu_item 2 "更新" "$width"
+    box_menu_item 3 "更新菜单" "$width"
+    box_menu_item 4 "历史版本" "$width"
+    box_menu_item 5 "卸载" "$width"
+    box_middle "$width"
+    box_menu_item 6 "重置用户名和密码" "$width"
+    box_menu_item 7 "重置 Web 访问路径" "$width"
+    box_menu_item 8 "重置设置" "$width"
+    box_menu_item 9 "修改端口" "$width"
+    box_menu_item 10 "查看当前设置" "$width"
+    box_middle "$width"
+    box_menu_item 11 "启动" "$width"
+    box_menu_item 12 "停止" "$width"
+    box_menu_item 13 "重启" "$width"
+    box_menu_item 14 "重启 Xray" "$width"
+    box_menu_item 15 "查看状态" "$width"
+    box_menu_item 16 "日志管理" "$width"
+    box_middle "$width"
+    box_menu_item 17 "启用开机自启" "$width"
+    box_menu_item 18 "禁用开机自启" "$width"
+    box_middle "$width"
+    box_menu_item 19 "SSL 证书管理" "$width"
+    box_menu_item 20 "Cloudflare SSL 证书" "$width"
+    box_menu_item 21 "IP 限制管理" "$width"
+    box_menu_item 22 "防火墙管理" "$width"
+    box_menu_item 23 "SSH 端口转发管理" "$width"
+    box_middle "$width"
+    box_menu_item 24 "启用 BBR" "$width"
+    box_menu_item 25 "更新地理文件" "$width"
+    box_menu_item 26 "Ookla Speedtest" "$width"
+    box_middle "$width"
+    box_menu_item 27 "PostgreSQL 管理" "$width"
+    box_bottom "$width"
     show_status
     echo && read -rp "请输入选项 [0-27]：" num
 
