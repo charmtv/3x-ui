@@ -3401,7 +3401,7 @@ show_usage() {
 
 show_menu() {
     echo ""
-    echo -e "${green}3X-UI 简体中文管理脚本${plain}"
+    echo -e "${green}米粒 3X-UI 简体中文管理脚本${plain}"
     echo -e "${green}0.${plain} 退出脚本"
     echo "────────────────────────────────────────"
     echo -e "${green}1.${plain} 安装"
