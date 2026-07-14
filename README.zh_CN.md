@@ -16,6 +16,10 @@
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
 </p>
 
+> [!NOTE]
+> 本仓库由 `charmtv/3x-ui` 维护，并同步上游 `MHSanaei/3x-ui`。专属入口为
+> [3xui.813099.xyz](https://3xui.813099.xyz)，可直接通过该域名获取安装脚本。
+
 **3X-UI** 是一个先进的开源 Web 控制面板，用于管理 [Xray-core](https://github.com/XTLS/Xray-core) 服务器。它提供简洁、多语言的界面，用于部署、配置和监控各种代理与 VPN 协议——从单台 VPS 到多节点部署。
 
 3X-UI 作为原始 X-UI 项目的增强分支（fork），增加了更广泛的协议支持、更好的稳定性、按客户端的流量统计以及许多提升使用体验的功能。
@@ -69,19 +73,19 @@
 ## 快速开始
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://3xui.813099.xyz/install.sh)
 ```
 
 若要安装特定版本，请在命令后附加对应的标签（例如 `v3.4.0`）：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) v3.4.0
+bash <(curl -Ls https://3xui.813099.xyz/install.sh) v3.4.0
 ```
 
 若要安装滚动更新的 **dev** 版本（来自 `main` 的最新逐次提交预发布版本，而非稳定版本），请传入 `dev-latest`：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) dev-latest
+bash <(curl -Ls https://3xui.813099.xyz/install.sh) dev-latest
 ```
 
 安装过程中会生成随机的用户名、密码和访问路径。安装完成后，运行 `x-ui` 打开管理菜单，您可以在其中启动/停止服务、查看或重置登录凭据、管理 SSL 证书等。
