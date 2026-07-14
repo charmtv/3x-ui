@@ -1039,9 +1039,10 @@ update_x-ui() {
         rm ${xui_folder}/x-ui.service.rhel -f > /dev/null 2>&1
         rm ${xui_folder}/x-ui -f > /dev/null 2>&1
         rm ${xui_folder}/x-ui.sh -f > /dev/null 2>&1
+        echo -e "${green}正在移除旧版 mtg...${plain}"
+        rm ${xui_folder}/bin/mtg-linux-$(arch) -f > /dev/null 2>&1
         echo -e "${green}正在移除旧版 xray...${plain}"
-        rm ${xui_folder}/bin/xray-linux-amd64 -f > /dev/null 2>&1
-        rm ${xui_folder}/bin/xray-linux-arm -f > /dev/null 2>&1
+        rm ${xui_folder}/bin/xray-linux-$(arch) -f > /dev/null 2>&1
         echo -e "${green}正在删除旧的 README 和 LICENSE 文件...${plain}"
         rm ${xui_folder}/bin/README.md -f > /dev/null 2>&1
         rm ${xui_folder}/bin/LICENSE -f > /dev/null 2>&1
