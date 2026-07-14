@@ -30,6 +30,8 @@ defaults:
 
 jobs:
   build:
+    # 本 Fork 使用 Cloudflare 域名提供安装脚本，不发布上游的 GitHub Pages 文档站。
+    if: github.repository == 'MHSanaei/3x-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
